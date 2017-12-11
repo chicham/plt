@@ -26,7 +26,7 @@ setup(
     packages=find_packages(include=['plt']),
     entry_points={
         'console_scripts': [
-            'plt=plt.cli:plt'
+            'plt=plt.cli:plot'
         ]
     },
     include_package_data=True,

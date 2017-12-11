@@ -9,11 +9,10 @@ import pandas as pd
 from pathlib import Path
 from .plot import *
 import json
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
-import ipdb
-from functools import wraps
+from collections import defaultdict
+import numpy as np
 
 
 @click.group(invoke_without_command=True)
@@ -35,12 +34,13 @@ from functools import wraps
 @click.option('--sharey', is_flag=True, default=False)
 @click.option('--title', default=None)
 @click.option('--use_index', is_flag=True, default=True)
-@click.option('--legend', default=True)
+@click.option('--legend/--no-legend', is_flag=True, default=True)
 @click.option('--logx', is_flag=True, default=False)
 @click.option('--logy', is_flag=True, default=False)
 @click.option('--loglog', is_flag=True, default=False)
 @click.option('--xlim', default=None)
 @click.option('--ylim', default=None)
+@click.option('--sep', default=',')
 @click.pass_context
 def plot(ctx,
          src,
@@ -66,10 +66,11 @@ def plot(ctx,
          xlim,
          ylim,
          xlabel,
-         ylabel):
+         ylabel,
+         sep):
 
     src = Path(src).absolute()
-    data = odo(str(src), pd.DataFrame)
+    data = odo(str(src), pd.DataFrame, delimiter=sep)
 
     if rc is not None:
         rc = json.load(open(Path(rc).absolute(), 'r'))
@@ -82,14 +83,11 @@ def plot(ctx,
             color_codes=color_codes,
             rc=rc)
 
-
     plot_args = {
-        'title': title,
         'subplots': subplots,
         'sharex': sharex,
         'sharey': sharey,
         'use_index': use_index,
-        'legend': legend,
         'logx': logx,
         'logy': logy,
         'loglog': loglog,
@@ -107,12 +105,14 @@ def plot(ctx,
 
         data = data[[x, y]]
 
-    ctx.obj = {}
-    ctx.obj['xlabel'] = xlabel
-    ctx.obj['ylabel'] = ylabel
+    ctx.obj = defaultdict(lambda: None)
+    ctx.obj['title'] = title
+    ctx.obj['legend'] = legend
 
     if ctx.invoked_subcommand is None:
         data.plot(**plot_args)
+        ctx.obj['xlabel'] = xlabel or 'x'
+        ctx.obj['ylabel'] = ylabel or 'y'
         on_end(ctx)
     else:
         ctx.obj['data'] = data
@@ -139,32 +139,45 @@ def ts(ctx,
         else:
             pass
 
+    ctx.obj['ylabel'] = ctx.obj['ylabel'] or method
     data.plot(**ctx.obj['plot_args'])
     on_end(ctx)
 
 
 @plot.command()
 @click.option('--pos', default=None)
+@click.option('-m', is_flag=True, default=False)
 @click.pass_context
-def ap(ctx, pos):
+def ap(ctx, pos, m):
     data = ctx.obj['data']
     plot_args = ctx.obj['plot_args']
     y_true = data[data.columns[0]].values
     y_preds = data[data.columns[1]].values
     precision, recall, thresholds = precision_recall_curve(y_true, y_preds, pos)
-    plt.plot(recall, precision)
+    label = None
+    if m:
+        label = 'mAP: {:0.3f}'.format(np.trapz(recall, precision))
+    plt.plot(recall, precision, label=label)
+    ctx.obj['xlabel'] = ctx.obj['xlabel'] or 'Recall'
+    ctx.obj['ylabel'] = ctx.obj['ylabel'] or 'Precision'
+    ctx.obj['title'] = ctx.obj['title'] or 'Precision/Recall curve'
+
     on_end(ctx)
 
 
+def fscore():
+    pass
+
+
 def on_end(ctx):
-    xlabel = ctx.obj.get('xlabel', None)
-    ylabel = ctx.obj.get('ylabel', None)
-
-    if xlabel is not None:
-        plt.xlabel(xlabel)
-    if ylabel is not None:
-        plt.ylabel(ylabel)
-
+    plt.xlabel(ctx.obj['xlabel'])
+    plt.ylabel(ctx.obj['ylabel'])
+    title = ctx.obj['title']
+    if title is not None:
+        plt.title(title)
+    legend = ctx.obj['legend']
+    if legend:
+        plt.legend()
     plt.show()
 
 
