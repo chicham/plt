@@ -144,6 +144,8 @@ def ts(ctx,
     sep = ctx.obj['sep']
     plot_args = ctx.obj['plot_args']
     subplots = plot_args['subplots']
+    sharex = plot_args['sharex']
+    sharey = plot_args['sharey']
 
     if subplots and len(files) > 1:
         plot_args['subplots'] = False
