@@ -165,10 +165,6 @@ def ap(ctx, pos, m):
     on_end(ctx)
 
 
-def fscore():
-    pass
-
-
 def on_end(ctx):
     plt.xlabel(ctx.obj['xlabel'])
     plt.ylabel(ctx.obj['ylabel'])
