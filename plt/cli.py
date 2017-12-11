@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import defaultdict
 import numpy as np
+from glob import glob
+from itertools import repeat
 
 
 @click.group(invoke_without_command=True)
@@ -69,8 +71,6 @@ def plot(ctx,
          ylabel,
          sep):
 
-    src = Path(src).absolute()
-    data = odo(str(src), pd.DataFrame, delimiter=sep)
 
     if rc is not None:
         rc = json.load(open(Path(rc).absolute(), 'r'))
@@ -95,28 +95,41 @@ def plot(ctx,
         'ylim': ylim,
     }
 
-    if y is not None:
-        if y.isdigit():
-            y = data.columns[int(y)]
-        if x is None:
-            x = '0'
-        if x.isdigit():
-            x = data.columns[int(x)]
-
-        data = data[[x, y]]
+    src = Path(src).expanduser().absolute()
+    files = glob(str(src))
 
     ctx.obj = defaultdict(lambda: None)
     ctx.obj['title'] = title
     ctx.obj['legend'] = legend
+    ctx.obj['xlabel'] = xlabel or 'x'
+    ctx.obj['ylabel'] = ylabel or 'y'
+    ctx.obj['plot_args'] = plot_args
+    ctx.obj['files'] = files
+    ctx.obj['sep'] = sep
+
 
     if ctx.invoked_subcommand is None:
-        data.plot(**plot_args)
-        ctx.obj['xlabel'] = xlabel or 'x'
-        ctx.obj['ylabel'] = ylabel or 'y'
+        if subplots and len(files) > 1:
+            plot_args['subplots'] = False
+            fig, axes = plt.subplots(len(files), sharex=sharex, sharey=sharey)
+        else:
+            fig, axes = plt.subplots()
+            axes = repeat(axes)
+        for f, a in zip(files, axes):
+            index = x or 0
+            data = odo(str(f), pd.DataFrame, delimiter=sep, index_col=index)
+            if y is not None:
+                if y.isdigit():
+                    y = data.columns[int(y)]
+                if x is None:
+                    x = '0'
+                if x.isdigit():
+                    x = data.columns[int(x)]
+
+                data = data[[x, y]]
+            data.plot(ax=a, **plot_args)
+
         on_end(ctx)
-    else:
-        ctx.obj['data'] = data
-        ctx.obj['plot_args'] = plot_args
 
 
 @plot.command()
@@ -127,40 +140,64 @@ def ts(ctx,
        resample,
        method):
     data = ctx.obj['data']
-    data = data.set_index(data.columns[0])
-    if resample is not None:
-        data = data.resample(resample)
-        if method == 'count':
-            data = data.count()
-        elif method == 'mean':
-            data = data.mean()
-        elif method == 'sum':
-            data = data.sum()
-        else:
-            pass
+    files = ctx.obj['files']
+    sep = ctx.obj['sep']
+    plot_args = ctx.obj['plot_args']
+    subplots = plot_args['subplots']
 
-    ctx.obj['ylabel'] = ctx.obj['ylabel'] or method
-    data.plot(**ctx.obj['plot_args'])
+    if subplots and len(files) > 1:
+        plot_args['subplots'] = False
+        fig, axes = plt.subplots(len(files), sharex=sharex, sharey=sharey)
+    else:
+        fig, axes = plt.subplots()
+        axes = repeat(axes)
+
+    for f, a in zip(files, axes):
+        data = odo(str(f), pd.DataFrame, delimiter=sep)
+        data = data.set_index(data.columns[0])
+        if resample is not None:
+            data = data.resample(resample)
+            if method == 'count':
+                data = data.count()
+            elif method == 'mean':
+                data = data.mean()
+            elif method == 'sum':
+                data = data.sum()
+            else:
+                pass
+
+        ctx.obj['ylabel'] = ctx.obj['ylabel'] or method
+        data.plot(ax=a, **ctx.obj['plot_args'])
     on_end(ctx)
 
 
 @plot.command()
 @click.option('--pos', default=None)
 @click.option('-m', is_flag=True, default=False)
+@click.option('--gt', default=0)
+@click.option('--preds', default=1)
 @click.pass_context
-def ap(ctx, pos, m):
-    data = ctx.obj['data']
+def ap(ctx, pos, m, gt, preds):
+    sep = ctx.obj['sep']
+    files = ctx.obj['files']
     plot_args = ctx.obj['plot_args']
-    y_true = data[data.columns[0]].values
-    y_preds = data[data.columns[1]].values
-    precision, recall, thresholds = precision_recall_curve(y_true, y_preds, pos)
-    label = None
-    if m:
-        label = 'mAP: {:0.3f}'.format(np.trapz(recall, precision))
-    plt.plot(recall, precision, label=label)
-    ctx.obj['xlabel'] = ctx.obj['xlabel'] or 'Recall'
-    ctx.obj['ylabel'] = ctx.obj['ylabel'] or 'Precision'
-    ctx.obj['title'] = ctx.obj['title'] or 'Precision/Recall curve'
+
+    for f in files:
+        data = odo(str(f), pd.DataFrame, delimiter=sep)
+        y_true = data[data.columns[gt]].values
+        y_preds = data[data.columns[preds]].values
+        precision, recall, _ = precision_recall_curve(y_true, y_preds, pos)
+        label = None
+        if m:
+            label = 'mAP: {:0.3f}'.format(np.trapz(recall, precision))
+        xlim = ctx.obj['plot_args']['xlim'] or (0, 1)
+        plt.xlim(xlim)
+        ylim = ctx.obj['plot_args']['ylim'] or (0, 1)
+        plt.ylim(ylim)
+        plt.plot(recall, precision, label=label)
+        ctx.obj['xlabel'] = ctx.obj['xlabel'] or 'Recall'
+        ctx.obj['ylabel'] = ctx.obj['ylabel'] or 'Precision'
+        ctx.obj['title'] = ctx.obj['title'] or 'Precision/Recall curve'
 
     on_end(ctx)
 
