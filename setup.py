@@ -11,38 +11,28 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = [
-    'Click>=6.0',
-    # TODO: put package requirements here
-]
+with open('./requirements.txt', 'r') as reqs:
+    requirements = reqs.read()
 
-setup_requirements = [
-    # TODO(chicham): put setup requirements (distutils extensions, etc.) here
-]
-
-test_requirements = [
-    # TODO: put package test requirements here
-]
 
 setup(
-    name='plot',
+    name='plt',
     version='0.1.0',
-    description="Fast plot from file",
+    description="Fast plot from command line",
     long_description=readme + '\n\n' + history,
     author="Hicham Randrianarivo",
     author_email='h.randrianarivo@qwant.com',
-    url='https://github.com/chicham/plot',
-    packages=find_packages(include=['plot']),
+    url='https://github.com/chicham/plt',
+    packages=find_packages(include=['plt']),
     entry_points={
         'console_scripts': [
-            'plot=plot.cli:plot'
+            'plt=plt.cli:plt'
         ]
     },
     include_package_data=True,
-    install_requires=requirements,
     license="MIT license",
     zip_safe=False,
-    keywords='plot',
+    keywords='plt',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
@@ -57,6 +47,5 @@ setup(
         'Programming Language :: Python :: 3.5',
     ],
     test_suite='tests',
-    tests_require=test_requirements,
-    setup_requires=setup_requirements,
+    install_requires=requirements
 )
