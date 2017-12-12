@@ -4,45 +4,45 @@
 
 import click
 import os
-from odo import odo
-import pandas as pd
-from pathlib import Path
-from .plot import *
 import json
-import matplotlib.pyplot as plt
+
+import pandas as pd
 import seaborn as sns
-from collections import defaultdict
+import matplotlib.pyplot as plt
 import numpy as np
+
+from .plot import *
+from collections import defaultdict
 from glob import glob
+from pathlib import Path
 from itertools import repeat
 
 
 @click.group(invoke_without_command=True)
 @click.argument('src', required=False)
-@click.option('-x', default=None)
-@click.option('-y', default=None)
-@click.option('--xlabel', default=None)
-@click.option('--ylabel', default=None)
-@click.option('--context', default='paper')
-@click.option('--style', default='whitegrid')
-@click.option('--palette', default='deep')
+@click.option('-x', default=None, help="Column to be used as x-axis (Integer or String)")
+@click.option('-y', default=None, help="Column to be used as y-axis (Integer or String)")
+@click.option('--xlabel', default=None, help="Name of x-axis")
+@click.option('--ylabel', default=None,  help="Name of y-axis")
+@click.option('--context', default='paper',help="Preset settings for the plot (paper, notebook, talk, poster)")
+@click.option('--style', default='whitegrid', help="Axes style (whitegrid, darkgrid, dark, white, ticks)")
+@click.option('--palette', default='deep', help="Seaborn color palette (deep, muted, bright, pastel, dark, colorblind)")
 @click.option('--font', default='sans-sherif')
 @click.option('--font_scale', default=1)
-@click.option('--color_codes', default=False)
-@click.option('--rc', default=None)
-@click.option('--kind', default='line')
-@click.option('--subplots', is_flag=True, default=False)
-@click.option('--sharex', is_flag=True, default=False)
-@click.option('--sharey', is_flag=True, default=False)
-@click.option('--title', default=None)
-@click.option('--use_index', is_flag=True, default=True)
-@click.option('--legend/--no-legend', is_flag=True, default=True)
-@click.option('--logx', is_flag=True, default=False)
-@click.option('--logy', is_flag=True, default=False)
-@click.option('--loglog', is_flag=True, default=False)
-@click.option('--xlim', default=None)
-@click.option('--ylim', default=None)
-@click.option('--sep', default=',')
+@click.option('--rc', default=None, help="Path the configuration file in json format")
+@click.option('--kind', default='line', help="Kind of plot (line, bar, barh, hist, box, kde, density, area, pie, scatter, hexbin)")
+@click.option('--subplots', is_flag=True, default=False, help="Make each plots on independant axes")
+@click.option('--sharex', is_flag=True, default=False, help="With subplots, use a shared x-axis")
+@click.option('--sharey', is_flag=True, default=False, help="With subplots, use a shared y-axis")
+@click.option('--title', default=None, help="Title of the plot")
+@click.option('--use_index', is_flag=True, default=True, help="Use the dataframe index for x-axis")
+@click.option('--legend/--no-legend', is_flag=True, default=True, help="Plot the legend on the graph")
+@click.option('--logx', is_flag=True, default=False, help="Use log scale for x-axis")
+@click.option('--logy', is_flag=True, default=False, help="Use log scale for y-axis")
+@click.option('--loglog', is_flag=True, default=False, help="Use log scale for both axis")
+@click.option('--xlim', default=None, help="Set x-axis limit")
+@click.option('--ylim', default=None , help="Set x-axis limit")
+@click.option('--sep', default=',', help="Separator between columns in the file")
 @click.pass_context
 def plot(ctx,
          src,
@@ -53,7 +53,6 @@ def plot(ctx,
          palette,
          font,
          font_scale,
-         color_codes,
          rc,
          kind,
          subplots,
@@ -71,10 +70,10 @@ def plot(ctx,
          ylabel,
          sep):
 
-
     if rc is not None:
         rc = json.load(open(Path(rc).absolute(), 'r'))
 
+    color_codes = palette
     sns.set(context=context,
             font_scale=font_scale,
             style=style,
@@ -83,6 +82,10 @@ def plot(ctx,
             color_codes=color_codes,
             rc=rc)
 
+    if xlim is not None:
+        xlim = tuple(map(float, xlim.split(',')))
+    if ylim is not None:
+        ylim = tuple(map(float, ylim.split(',')))
     plot_args = {
         'subplots': subplots,
         'sharex': sharex,
@@ -133,8 +136,8 @@ def plot(ctx,
 
 
 @plot.command()
-@click.option('--resample', default=None)
-@click.option('--method', default='sum')
+@click.option('--resample', default=None, help="Frequency offset (http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases)")
+@click.option('--method', default='sum', help="Method to aggregate (sum, mean, count)")
 @click.pass_context
 def ts(ctx,
        resample,
@@ -174,10 +177,10 @@ def ts(ctx,
 
 
 @plot.command()
-@click.option('--pos', default=None)
-@click.option('-m', is_flag=True, default=False)
-@click.option('--gt', default=0)
-@click.option('--preds', default=1)
+@click.option('--pos', default=None, help="Positive label")
+@click.option('-m', is_flag=True, default=False, help="Add mean average accuracy in the legend")
+@click.option('--gt', default=0, help="Column  of the groundtruth")
+@click.option('--preds', default=1, help="Column of the predictions")
 @click.pass_context
 def ap(ctx, pos, m, gt, preds):
     sep = ctx.obj['sep']
