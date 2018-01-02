@@ -63,3 +63,6 @@ target/
 plot.egg-info
 requirements_dev.txt
 *neomake*
+GPATH
+GRTAGS
+GTAGS
