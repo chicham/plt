@@ -5,3 +5,7 @@ seaborn
 pandas
 toolz
 matplotlib
+cython
+rasterio
+gdal
+scikit-image

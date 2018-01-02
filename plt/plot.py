@@ -2,15 +2,8 @@
 
 """Main module."""
 
-import pandas as pd
-import datashape
-from datashape.predicates import isrecord
-from toolz import keyfilter
-
-from functools import wraps
 import warnings
 import numpy as np
-import re
 
 
 def substring(data):

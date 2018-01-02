@@ -2,46 +2,70 @@
 
 """Console script for plot."""
 
+import ipdb
+
 import click
-import os
 import json
 
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import rasterio
+import rasterio.plot as rplt
 
-from .plot import *
+from .plot import precision_recall_curve
 from collections import defaultdict
 from glob import glob
 from pathlib import Path
 from itertools import repeat
+from odo import odo
+from skimage import exposure, util
+
+N_COLORS = 6
+N_MARKERS = 3
 
 
 @click.group(invoke_without_command=True)
 @click.argument('src', required=False)
-@click.option('-x', default=None, help="Column to be used as x-axis (Integer or String)")
-@click.option('-y', default=None, help="Column to be used as y-axis (Integer or String)")
+@click.option('-x', default=None,
+              help="Column to be used as x-axis (Integer or String)")
+@click.option('-y', default=None,
+              help="Column to be used as y-axis (Integer or String)")
 @click.option('--xlabel', default=None, help="Name of x-axis")
 @click.option('--ylabel', default=None,  help="Name of y-axis")
-@click.option('--context', default='paper',help="Preset settings for the plot (paper, notebook, talk, poster)")
-@click.option('--style', default='whitegrid', help="Axes style (whitegrid, darkgrid, dark, white, ticks)")
-@click.option('--palette', default='deep', help="Seaborn color palette (deep, muted, bright, pastel, dark, colorblind)")
+@click.option('--context', default='paper',
+              help="Preset for the plot (paper, notebook, talk, poster)")
+@click.option('--style', default='whitegrid',
+              help="Axes style (whitegrid, darkgrid, dark, white, ticks)")
+@click.option('--palette', default='deep',
+              help="Seaborn palette (deep, muted, bright, pastel, dark, colorblind)")
 @click.option('--font', default='sans-sherif')
 @click.option('--font_scale', default=1)
-@click.option('--rc', default=None, help="Path the configuration file in json format")
-@click.option('--kind', default='line', help="Kind of plot (line, bar, barh, hist, box, kde, density, area, pie, scatter, hexbin)")
-@click.option('--subplots', is_flag=True, default=False, help="Make each plots on independant axes")
-@click.option('--sharex', is_flag=True, default=False, help="With subplots, use a shared x-axis")
-@click.option('--sharey', is_flag=True, default=False, help="With subplots, use a shared y-axis")
+@click.option('--rc', default=None,
+              help="Path the configuration file in json format")
+@click.option('--kind', default='line',
+              help="Kind of plot (line, bar, barh, hist, box, kde, density,"
+                   "area, pie, scatter, hexbin)")
+@click.option('--subplots', is_flag=True, default=False,
+              help="Make each plots on independant axes")
+@click.option('--sharex', is_flag=True, default=False,
+              help="With subplots, use a shared x-axis")
+@click.option('--sharey', is_flag=True, default=False,
+              help="With subplots, use a shared y-axis")
 @click.option('--title', default=None, help="Title of the plot")
-@click.option('--use_index', is_flag=True, default=True, help="Use the dataframe index for x-axis")
-@click.option('--legend/--no-legend', is_flag=True, default=True, help="Plot the legend on the graph")
-@click.option('--logx', is_flag=True, default=False, help="Use log scale for x-axis")
-@click.option('--logy', is_flag=True, default=False, help="Use log scale for y-axis")
-@click.option('--loglog', is_flag=True, default=False, help="Use log scale for both axis")
+@click.option('--use_index', is_flag=True, default=True,
+              help="Use the dataframe index for x-axis")
+@click.option('--legend/--no-legend', is_flag=True, default=True,
+              help="Plot the legend on the graph")
+@click.option('--logx', is_flag=True, default=False,
+              help="Use log scale for x-axis")
+@click.option('--logy', is_flag=True, default=False,
+              help="Use log scale for y-axis")
+@click.option('--loglog', is_flag=True, default=False,
+              help="Use log scale for both axis")
 @click.option('--xlim', default=None, help="Set x-axis limit")
-@click.option('--ylim', default=None , help="Set x-axis limit")
+@click.option('--ylim', default=None, help="Set x-axis limit")
 @click.option('--sep', default=',', help="Separator between columns in the file")
 @click.pass_context
 def plot(ctx,
@@ -100,6 +124,9 @@ def plot(ctx,
 
     src = Path(src).expanduser().absolute()
     files = glob(str(src))
+    # colors = sns.color_palette(palette, N_COLORS)
+    # makers = ['s', 'x', 'o', '^']
+    # styles = product(colors, makers)
 
     ctx.obj = defaultdict(lambda: None)
     ctx.obj['title'] = title
@@ -109,7 +136,7 @@ def plot(ctx,
     ctx.obj['plot_args'] = plot_args
     ctx.obj['files'] = files
     ctx.obj['sep'] = sep
-
+    # ctx.obj['styles'] = styles
 
     if ctx.invoked_subcommand is None:
         if subplots and len(files) > 1:
@@ -121,6 +148,7 @@ def plot(ctx,
         for f, a in zip(files, axes):
             index = x or 0
             data = odo(str(f), pd.DataFrame, delimiter=sep, index_col=index)
+
             if y is not None:
                 if y.isdigit():
                     y = data.columns[int(y)]
@@ -131,13 +159,33 @@ def plot(ctx,
 
                 data = data[[x, y]]
             data.plot(ax=a, **plot_args)
-
         on_end(ctx)
 
 
 @plot.command()
-@click.option('--resample', default=None, help="Frequency offset (http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases)")
-@click.option('--method', default='sum', help="Method to aggregate (sum, mean, count)")
+@click.option('--gamma', default=.5)
+@click.option('--gain', default=1.)
+@click.pass_context
+def raster(ctx,
+           gamma: float,
+           gain: float):
+    f = ctx.obj['files'][0]
+
+    with rasterio.open(f, 'r') as src:
+        data = src.read()
+        data = util.img_as_float(data)
+        for ii, band in enumerate(data):
+            band = exposure.adjust_gamma(band, gamma=gamma, gain=gain)
+            data[ii] = exposure.equalize_adapthist(band)
+        rplt.show(data)
+
+
+@plot.command()
+@click.option('--resample', default=None,
+              help="Frequency offset (http://pandas.pydata.org/pandas-docs/"
+                   "stable/timeseries.html#offset-aliases)")
+@click.option('--method', default='sum',
+              help="Method to aggregate (sum, mean, count)")
 @click.pass_context
 def ts(ctx,
        resample,
@@ -178,14 +226,14 @@ def ts(ctx,
 
 @plot.command()
 @click.option('--pos', default=None, help="Positive label")
-@click.option('-m', is_flag=True, default=False, help="Add mean average accuracy in the legend")
+@click.option('-m', is_flag=True, default=False,
+              help="Add mean average accuracy in the legend")
 @click.option('--gt', default=0, help="Column  of the groundtruth")
 @click.option('--preds', default=1, help="Column of the predictions")
 @click.pass_context
 def ap(ctx, pos, m, gt, preds):
     sep = ctx.obj['sep']
     files = ctx.obj['files']
-    plot_args = ctx.obj['plot_args']
 
     for f in files:
         data = odo(str(f), pd.DataFrame, delimiter=sep)
