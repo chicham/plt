@@ -6,12 +6,13 @@ import ipdb
 
 import click
 import json
+import warnings
+import rasterio
 
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
-import rasterio
 import rasterio.plot as rplt
 
 from .plot import precision_recall_curve
@@ -21,6 +22,7 @@ from pathlib import Path
 from itertools import repeat
 from odo import odo
 from skimage import exposure, util
+from PIL import Image
 
 N_COLORS = 6
 N_MARKERS = 3
@@ -163,21 +165,40 @@ def plot(ctx,
 
 
 @plot.command()
-@click.option('--gamma', default=.5)
-@click.option('--gain', default=1.)
+@click.option('--gamma', default=.5,
+              help="Gamma correction of the image, gamma>1 image is darker")
+@click.option('--gain', default=1.,
+              help="Constant multiplier for gamma correction")
+@click.option('--adaptative', is_flag=True, default=False,
+              help="Adaptative equalization of the histogram")
+@click.option('--equalize', is_flag=True, default=False,
+              help="Histogram equalization")
 @click.pass_context
 def raster(ctx,
            gamma: float,
-           gain: float):
+           gain: float,
+           adaptative: bool,
+           equalize: bool):
     f = ctx.obj['files'][0]
 
-    with rasterio.open(f, 'r') as src:
-        data = src.read()
-        data = util.img_as_float(data)
-        for ii, band in enumerate(data):
-            band = exposure.adjust_gamma(band, gamma=gamma, gain=gain)
-            data[ii] = exposure.equalize_adapthist(band)
-        rplt.show(data)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        with rasterio.open(f, 'r') as src:
+            data = src.read()
+            data = util.img_as_float(data)
+            for ii, band in enumerate(data):
+                band = exposure.adjust_gamma(band, gamma=gamma, gain=gain)
+                if adaptative:
+                    data[ii] = exposure.equalize_adapthist(band)
+                elif equalize:
+                    data[ii] = exposure.equalize_hist(band)
+                else:
+                    pass
+            f, ax = plt.subplots()
+            rplt.show(data, ax=ax)
+            ax.grid(False)
+            plt.axis('off')
+            plt.show()
 
 
 @plot.command()
