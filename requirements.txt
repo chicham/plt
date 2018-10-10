@@ -1,5 +1,3 @@
 absl-py
 seaborn
 pandas
-toolz
-imageio
