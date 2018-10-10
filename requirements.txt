@@ -1,11 +1,5 @@
-Click>=6.0
-odo
-networkx==1.11
+absl-py
 seaborn
 pandas
 toolz
-matplotlib
-cython
-rasterio
-gdal
-scikit-image
+imageio

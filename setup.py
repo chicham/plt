@@ -8,25 +8,22 @@ from setuptools import setup, find_packages
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-with open('HISTORY.rst') as history_file:
-    history = history_file.read()
-
 with open('./requirements.txt', 'r') as reqs:
     requirements = reqs.read()
 
 
 setup(
     name='plt',
-    version='0.1.0',
+    version='0.2.0',
     description="Fast plot from command line",
-    long_description=readme + '\n\n' + history,
+    long_description=readme,
     author="Hicham Randrianarivo",
     author_email='h.randrianarivo@qwant.com',
     url='https://github.com/chicham/plt',
     packages=find_packages(include=['plt']),
     entry_points={
         'console_scripts': [
-            'plt=plt.cli:plot'
+            'plt=plt.plot:run'
         ]
     },
     include_package_data=True,
